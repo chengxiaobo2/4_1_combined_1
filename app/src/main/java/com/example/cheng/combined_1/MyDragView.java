@@ -1,10 +1,17 @@
 package com.example.cheng.combined_1;
 
+import android.animation.Animator;
+import android.animation.AnimatorSet;
+import android.animation.ObjectAnimator;
 import android.app.Activity;
 import android.content.Context;
+import android.os.Handler;
+import android.os.Message;
+import android.os.Vibrator;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -22,6 +29,17 @@ public class MyDragView extends ViewGroup {
     private int mRowSpacing;
     private int mColumnSpacing;
     private Context mContext;
+    private GestureDetector gestureDetector;
+    private GestureLongPress gestureLongPress;
+    private View mCurrentMoveView=null;
+    private View mSelectedView=null;
+    private int mSelectedIndex=-1;
+    private int mDownX;
+    private int mDownY;
+    private int mlastX;
+    private int mlastY;
+
+    private int mLongPress =-1;
 
     private MyDragViewAdapter adapter;
     private int mRowCount=0;
@@ -64,6 +82,109 @@ public class MyDragView extends ViewGroup {
         mColumnSpacing =(int)mDensity*20;
 
         mContext=context;
+
+        gestureDetector= new GestureDetector(context, new GestureDetector.OnGestureListener() {
+            @Override
+            public boolean onDown(MotionEvent e) {
+                return false;
+            }
+
+            @Override
+            public void onShowPress(MotionEvent e) {
+
+            }
+
+            @Override
+            public boolean onSingleTapUp(MotionEvent e) {
+                return false;
+            }
+
+            @Override
+            public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+                return false;
+            }
+
+            @Override
+            public void onLongPress(MotionEvent e)
+            {
+                log("=======onLongPress======"+e.getX());
+            }
+
+            @Override
+            public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+                return false;
+            }
+        });
+
+        gestureLongPress=new GestureLongPress() {
+
+            @Override
+            public void onLongPress(int x, int y)
+            {
+                //判断是不是点中某个View
+
+                log("=======onLongPress=ziji====="+x+"==============="+y);
+
+                boolean isInView=true;
+                int index=-1;
+
+                int indexColumn=x/(mViewWidth+mColumnSpacing);
+                if(x%(mViewWidth+mColumnSpacing)<mColumnSpacing)
+                {
+                    isInView=false;
+                }
+
+                int indexRow=y/(mViewHeight+mRowSpacing);
+                if(x%(mViewHeight+mRowSpacing)<mRowSpacing)
+                {
+                    isInView=false;
+                }
+
+                if(isInView)
+                {
+                    index=indexRow*ROW_COUNT+indexColumn;
+
+                    log("======index============="+index);
+
+                    if(index>getChildCount()-1)
+                    {
+                        isInView=false;
+                    }
+                }
+
+                if(isInView)
+                {
+                    for(int i=0;i<getChildCount();i++)
+                    {
+                        MyItemView myItemView=((MyItemView)getChildAt(i));
+                        if(myItemView.getIndex()==index)
+                        {
+                            myItemView.setAlpha(0.5f);
+
+                            addItemView(adapter.getView(myItemView.getOriginIndex()),myItemView.getOriginIndex(),myItemView.getIndex());
+
+                            mCurrentMoveView=getChildAt(getChildCount()-1);
+
+                            AnimatorSet set=new AnimatorSet();
+                            set.playTogether(ObjectAnimator.ofFloat(mCurrentMoveView,"scaleX",1.0f,1.1f),ObjectAnimator.ofFloat(mCurrentMoveView,"scaleY",1.0f,1.1f));
+                            set.setDuration(300);
+                            set.start();
+
+                            Vibrator vibrator=(Vibrator) mContext.getSystemService(Context.VIBRATOR_SERVICE);
+                            vibrator.vibrate(new long[]{100,200},-1);
+
+                            mSelectedView=myItemView;
+
+                            mSelectedIndex=myItemView.getIndex();
+
+                            break;
+                        }
+                    }
+                }
+                log("======isInView============="+isInView);
+
+            }
+        };
     }
 
 
@@ -77,7 +198,7 @@ public class MyDragView extends ViewGroup {
 
             for(int i=0;i<adapter.getCount();i++)
             {
-                addItemView(adapter.getView(i),i);
+                addItemView(adapter.getView(i),i,i);
             }
         }
     }
@@ -88,21 +209,106 @@ public class MyDragView extends ViewGroup {
      * @param view
      * @param i
      */
-    private void addItemView(View view,int i)
+    private void addItemView(View view,int originIndex,int index)
     {
        final MyItemView myItemView=new MyItemView(mContext);
         myItemView.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT,LayoutParams.MATCH_PARENT));
 
-        myItemView.setIndex(i);
+        myItemView.setIndex(index);
+        myItemView.setOriginIndex(originIndex);
+
         myItemView.addView(view);
 
         addView(myItemView);
     }
 
+    Handler handler=new Handler()
+    {
+        @Override
+        public void handleMessage(Message msg) {
+            super.handleMessage(msg);
+        }
+    };
+
     @Override
     public boolean onTouchEvent(MotionEvent event)
     {
-        return super.onTouchEvent(event);
+        gestureDetector.onTouchEvent(event);
+
+        int x=(int) event.getX();
+        int y=(int) event.getY();
+
+        switch (event.getAction()&MotionEvent.ACTION_MASK)
+        {
+            case MotionEvent.ACTION_DOWN:
+                mDownX=(int) event.getX();
+                mDownY=(int) event.getY();
+
+                mLongPress =-1;
+                mCurrentMoveView=null;
+
+                log("====ACTION_DOWN=====mDownX=="+mDownX+"=====mDownY==="+mDownY);
+
+                handler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+
+                        if(mLongPress ==-1)
+                        {
+                            gestureLongPress.onLongPress(mDownX,mDownY);
+                            mLongPress =1;
+                        }
+
+                    }
+                },680);
+                break;
+
+            case MotionEvent.ACTION_MOVE:
+
+                if(mLongPress ==-1&&!(mlastX==x&&mlastY==y))
+                {
+                    mLongPress =0;
+                    log("====ACTION_MOVE=====x=="+x+"=====y==="+y);
+
+                }else if (mLongPress ==0)
+                {
+
+                }else if(mLongPress ==1)
+                {
+                    if(mCurrentMoveView!=null)
+                    {
+                        mCurrentMoveView.setTranslationX(x-mDownX);
+                        mCurrentMoveView.setTranslationY(y-mDownY);
+                    }
+                }
+
+                break;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+
+                mLongPress=0;
+
+                mDownX=0;
+                mDownY=0;
+
+                if(mCurrentMoveView!=null)
+                {
+                    removeView(mCurrentMoveView);
+                }
+
+                mCurrentMoveView=null;
+
+                if(mSelectedView!=null)
+                {
+                    mSelectedView.setAlpha(1.0f);
+                }
+
+                break;
+        }
+
+        mlastX=x;
+        mlastY=y;
+        return true;
     }
 
     @Override
@@ -145,7 +351,7 @@ public class MyDragView extends ViewGroup {
                 heightValue=mRowCount*mViewHeight+(mRowCount+1)* mColumnSpacing;
             }
 
-            int count=getChildCount();
+            int count=adapter.getCount();
             mRowCount=count%ROW_COUNT==0?count/ROW_COUNT:count/ROW_COUNT+1;
 
             int childMesureSpecWidth=MeasureSpec.makeMeasureSpec(mViewWidth,MeasureSpec.EXACTLY);
@@ -208,10 +414,14 @@ public class MyDragView extends ViewGroup {
         View getView(int i);
     }
 
+    interface GestureLongPress
+    {
+        void onLongPress(int x,int y);
+    }
+
     private void log(String s)
     {
         Log.d(tag,tag+"========="+s);
     }
-
 
 }

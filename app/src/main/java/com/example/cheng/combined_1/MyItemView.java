@@ -11,6 +11,7 @@ import android.view.ViewGroup;
 public class MyItemView extends ViewGroup
 {
     private int index=0;
+    private int originIndex=0;
 
     public MyItemView(Context context) {
         super(context);
@@ -53,5 +54,14 @@ public class MyItemView extends ViewGroup
     public void setIndex(int index)
     {
         this.index = index;
+    }
+
+
+    public int getOriginIndex() {
+        return originIndex;
+    }
+
+    public void setOriginIndex(int originIndex) {
+        this.originIndex = originIndex;
     }
 }
