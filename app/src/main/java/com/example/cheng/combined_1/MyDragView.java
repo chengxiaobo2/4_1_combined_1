@@ -16,6 +16,8 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 
+import static com.example.cheng.combined_1.R.drawable.a;
+
 /**
  * Created by cheng on 2017/5/22.
  */
@@ -34,6 +36,7 @@ public class MyDragView extends ViewGroup {
     private View mCurrentMoveView=null;
     private View mSelectedView=null;
     private int mSelectedIndex=-1;
+    private int mCurrentSelectedIndex=-1;
     private int mDownX;
     private int mDownY;
     private int mlastX;
@@ -125,34 +128,9 @@ public class MyDragView extends ViewGroup {
 
                 log("=======onLongPress=ziji====="+x+"==============="+y);
 
-                boolean isInView=true;
-                int index=-1;
+                int index=getSelectedIndex(x,y);
 
-                int indexColumn=x/(mViewWidth+mColumnSpacing);
-                if(x%(mViewWidth+mColumnSpacing)<mColumnSpacing)
-                {
-                    isInView=false;
-                }
-
-                int indexRow=y/(mViewHeight+mRowSpacing);
-                if(x%(mViewHeight+mRowSpacing)<mRowSpacing)
-                {
-                    isInView=false;
-                }
-
-                if(isInView)
-                {
-                    index=indexRow*ROW_COUNT+indexColumn;
-
-                    log("======index============="+index);
-
-                    if(index>getChildCount()-1)
-                    {
-                        isInView=false;
-                    }
-                }
-
-                if(isInView)
+                if(index!=-1)
                 {
                     for(int i=0;i<getChildCount();i++)
                     {
@@ -181,11 +159,50 @@ public class MyDragView extends ViewGroup {
                         }
                     }
                 }
-                log("======isInView============="+isInView);
+                log("======index============="+index);
 
             }
         };
     }
+
+    /**
+     * 根据坐标 确定选中的 index
+     *
+     * @param x
+     * @param y
+     * @return
+     */
+    private int getSelectedIndex(int x,int y)
+    {
+        boolean isInView=true;
+        int index=-1;
+
+        int indexColumn=x/(mViewWidth+mColumnSpacing);
+        if(x%(mViewWidth+mColumnSpacing)<mColumnSpacing)
+        {
+            isInView=false;
+        }
+
+        int indexRow=y/(mViewHeight+mRowSpacing);
+        if(x%(mViewHeight+mRowSpacing)<mRowSpacing)
+        {
+            isInView=false;
+        }
+
+        if(isInView)
+        {
+            index=indexRow*ROW_COUNT+indexColumn;
+
+            if(index>=adapter.getCount())
+            {
+                index=-1;
+            }
+        }
+
+        log("======getSelectedIndex============="+index);
+        return index;
+    }
+
 
 
     public void setAdapter(MyDragViewAdapter adapter)
@@ -279,6 +296,40 @@ public class MyDragView extends ViewGroup {
                     {
                         mCurrentMoveView.setTranslationX(x-mDownX);
                         mCurrentMoveView.setTranslationY(y-mDownY);
+
+                        int index=getSelectedIndex(x,y);
+                        if(index!=-1)
+                        {
+                            mCurrentSelectedIndex=index;
+
+                            if(mCurrentSelectedIndex!=mSelectedIndex) {
+                                if (mCurrentSelectedIndex > mSelectedIndex) { //往后面移动
+                                    for (int i = 0; i < adapter.getCount(); i++) {
+                                        MyItemView myItemView = (MyItemView) getChildAt(i);
+                                        int viewIndex = myItemView.getIndex();
+                                        if (viewIndex > mSelectedIndex && viewIndex <= mCurrentSelectedIndex) {
+                                            myItemView.setIndex(viewIndex - 1);
+                                        }
+
+                                        ((MyItemView) mSelectedView).setIndex(mCurrentSelectedIndex);
+                                    }
+                                } else if (mCurrentSelectedIndex < mSelectedIndex) { //往前面移动
+                                    for (int i = 0; i < adapter.getCount(); i++) {
+                                        MyItemView myItemView = (MyItemView) getChildAt(i);
+                                        int viewIndex = myItemView.getIndex();
+                                        if (viewIndex >= mCurrentSelectedIndex && viewIndex < mSelectedIndex) {
+                                            myItemView.setIndex(viewIndex + 1);
+                                        }
+
+                                        ((MyItemView) mSelectedView).setIndex(mCurrentSelectedIndex);
+                                    }
+                                }
+                            }
+
+                            mSelectedIndex=mCurrentSelectedIndex;
+
+                            requestLayout();
+                        }
                     }
                 }
 
@@ -402,6 +453,8 @@ public class MyDragView extends ViewGroup {
                 int top=row*mViewHeight+(row+1)*mColumnSpacing;
 
                 view.layout(left,top,left+mViewWidth,top+mViewHeight);
+
+                log("============onLayout=============");
             }
 
         }
