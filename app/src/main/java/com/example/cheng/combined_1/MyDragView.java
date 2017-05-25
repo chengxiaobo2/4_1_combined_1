@@ -15,8 +15,10 @@ import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.DecelerateInterpolator;
 
-import static com.example.cheng.combined_1.R.drawable.a;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by cheng on 2017/5/22.
@@ -27,12 +29,11 @@ public class MyDragView extends ViewGroup {
 
     private static final int ROW_COUNT=3;
 
-    private float mDensity;
-    private int mRowSpacing;
-    private int mColumnSpacing;
-    private Context mContext;
+
     private GestureDetector gestureDetector;
     private GestureLongPress gestureLongPress;
+    private MyDragViewAdapter adapter;
+
     private View mCurrentMoveView=null;
     private View mSelectedView=null;
     private int mSelectedIndex=-1;
@@ -43,10 +44,13 @@ public class MyDragView extends ViewGroup {
     private int mlastY;
 
     private int mLongPress =-1;
+    private boolean mIsBeingAnimation=false;
 
-    private MyDragViewAdapter adapter;
+    private float mDensity;
+    private int mRowSpacing;
+    private int mColumnSpacing;
+    private Context mContext;
     private int mRowCount=0;
-    private int mHeightValue=0;
     private int mViewWidth=0;
     private int mViewHeight=0;
 
@@ -154,6 +158,7 @@ public class MyDragView extends ViewGroup {
                             mSelectedView=myItemView;
 
                             mSelectedIndex=myItemView.getIndex();
+                            mCurrentSelectedIndex=mSelectedIndex;
 
                             break;
                         }
@@ -218,13 +223,26 @@ public class MyDragView extends ViewGroup {
                 addItemView(adapter.getView(i),i,i);
             }
         }
+
+//        //TODO test
+//
+//        this.post(new Runnable() {
+//            @Override
+//            public void run() {
+//
+//                MyItemView myItemView=(MyItemView)getChildAt(0);
+//                Animator animator=ObjectAnimator.ofFloat(myItemView,"translationX",0,-308);
+//                animator.setDuration(1000);
+//                animator.start();
+//
+//                log("==============post============");
+//            }
+//        });
+
     }
 
     /**
      * 封装一层
-     *
-     * @param view
-     * @param i
      */
     private void addItemView(View view,int originIndex,int index)
     {
@@ -298,37 +316,67 @@ public class MyDragView extends ViewGroup {
                         mCurrentMoveView.setTranslationY(y-mDownY);
 
                         int index=getSelectedIndex(x,y);
-                        if(index!=-1)
+
+                        if(index!=-1&&!mIsBeingAnimation&index!=mSelectedIndex)
                         {
+                            log("=========移动=====================");
+
                             mCurrentSelectedIndex=index;
 
-                            if(mCurrentSelectedIndex!=mSelectedIndex) {
-                                if (mCurrentSelectedIndex > mSelectedIndex) { //往后面移动
-                                    for (int i = 0; i < adapter.getCount(); i++) {
-                                        MyItemView myItemView = (MyItemView) getChildAt(i);
-                                        int viewIndex = myItemView.getIndex();
-                                        if (viewIndex > mSelectedIndex && viewIndex <= mCurrentSelectedIndex) {
-                                            myItemView.setIndex(viewIndex - 1);
-                                        }
+                            List<Animator> animators=new ArrayList<Animator>();
 
-                                        ((MyItemView) mSelectedView).setIndex(mCurrentSelectedIndex);
+                            if (mCurrentSelectedIndex > mSelectedIndex)
+                            { //往后面移动
+                                for (int i = 0; i < adapter.getCount(); i++) {
+                                    MyItemView myItemView = (MyItemView) getChildAt(i);
+                                    int viewIndex = myItemView.getIndex();
+                                    if (viewIndex > mSelectedIndex && viewIndex <= mCurrentSelectedIndex) {
+                                        myItemView.setIndex(viewIndex - 1);
+
+                                        int [] xy=getXY(viewIndex-1);
+                                        int [] xyl=getXY(viewIndex);
+
+                                        animators.add(ObjectAnimator.ofFloat(myItemView,"translationX",0,xy[0]-xyl[0]));
+                                        animators.add(ObjectAnimator.ofFloat(myItemView,"translationY",0,xy[1]-xyl[1]));
+
                                     }
-                                } else if (mCurrentSelectedIndex < mSelectedIndex) { //往前面移动
-                                    for (int i = 0; i < adapter.getCount(); i++) {
-                                        MyItemView myItemView = (MyItemView) getChildAt(i);
-                                        int viewIndex = myItemView.getIndex();
-                                        if (viewIndex >= mCurrentSelectedIndex && viewIndex < mSelectedIndex) {
-                                            myItemView.setIndex(viewIndex + 1);
-                                        }
 
-                                        ((MyItemView) mSelectedView).setIndex(mCurrentSelectedIndex);
+
+                                }
+                            } else if (mCurrentSelectedIndex < mSelectedIndex) { //往前面移动
+                                for (int i = 0; i < adapter.getCount(); i++) {
+                                    MyItemView myItemView = (MyItemView) getChildAt(i);
+                                    int viewIndex = myItemView.getIndex();
+                                    if (viewIndex >= mCurrentSelectedIndex && viewIndex < mSelectedIndex) {
+                                        myItemView.setIndex(viewIndex + 1);
+
+                                        int[] xy = getXY(viewIndex + 1);
+                                        int[] xyl = getXY(viewIndex);
+
+                                        log("translateX"+"=========="+ (xy[0] - xyl[0])+"====translationY======="+(xy[1] - xyl[1]));
+
+                                        animators.add(ObjectAnimator.ofFloat(myItemView, "translationX", 0, xy[0] - xyl[0]));
+                                        animators.add(ObjectAnimator.ofFloat(myItemView, "translationY", 0, xy[1] - xyl[1]));
                                     }
                                 }
                             }
 
-                            mSelectedIndex=mCurrentSelectedIndex;
+                            int[] xy = getXY(mCurrentSelectedIndex);
+                            int[] xyl = getXY(mSelectedIndex);
 
-                            requestLayout();
+                            animators.add(ObjectAnimator.ofFloat(mSelectedView, "translationX", 0, xy[0] - xyl[0]));
+                            animators.add(ObjectAnimator.ofFloat(mSelectedView, "translationY", 0, xy[1] - xyl[1]));
+
+                            ((MyItemView) mSelectedView).setIndex(mCurrentSelectedIndex);
+
+                            AnimatorSet set=new AnimatorSet();
+                            set.playTogether(animators);
+                            set.setDuration(300);
+                            set.setInterpolator(new DecelerateInterpolator());
+                            set.addListener(new MyAnimationListener());
+                            set.start();
+
+                            mSelectedIndex=mCurrentSelectedIndex;
                         }
                     }
                 }
@@ -452,6 +500,12 @@ public class MyDragView extends ViewGroup {
                 int left=column*mViewWidth+(column+1)*mRowSpacing;
                 int top=row*mViewHeight+(row+1)*mColumnSpacing;
 
+                if(view!=mCurrentMoveView)
+                {
+                    view.setTranslationX(0);
+                    view.setTranslationY(0);
+                }
+
                 view.layout(left,top,left+mViewWidth,top+mViewHeight);
 
                 log("============onLayout=============");
@@ -459,6 +513,20 @@ public class MyDragView extends ViewGroup {
 
         }
 
+    }
+
+    private int[] getXY(int index)
+    {
+        int row=index/ROW_COUNT;
+        int column=index%ROW_COUNT;
+
+
+        int left=column*mViewWidth+(column+1)*mRowSpacing;
+        int top=row*mViewHeight+(row+1)*mColumnSpacing;
+
+        log("=========getXY========"+left+"=========="+top);
+
+        return new int[]{left,top};
     }
 
     interface MyDragViewAdapter
@@ -470,6 +538,38 @@ public class MyDragView extends ViewGroup {
     interface GestureLongPress
     {
         void onLongPress(int x,int y);
+    }
+
+    class MyAnimationListener implements Animator.AnimatorListener
+    {
+        @Override
+        public void onAnimationStart(Animator animation)
+        {
+            mIsBeingAnimation=true;
+
+            log("=======onAnimationStart=========");
+        }
+
+        @Override
+        public void onAnimationEnd(Animator animation)
+        {
+            mIsBeingAnimation=false;
+            requestLayout();
+
+            log("=======onAnimationEnd=========");
+        }
+
+        @Override
+        public void onAnimationCancel(Animator animation)
+        {
+            mIsBeingAnimation=false;
+            requestLayout();
+        }
+
+        @Override
+        public void onAnimationRepeat(Animator animation) {
+
+        }
     }
 
     private void log(String s)
